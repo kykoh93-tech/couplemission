@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>番茄 & 番薯 双人情侣游戏</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+body {
+  margin: 0;
+  background: #111;
+  color: #fff;
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+canvas {
+  background: #222;
+  margin-top: 20px;
+}
+.controls {
+  display: grid;
+  grid-template-columns: repeat(3, 60px);
+  grid-template-rows: repeat(3, 60px);
+  gap: 6px;
+  margin-top: 12px;
+}
+.btn {
+  background: #22c55e;
+  color: #000;
+  font-size: 22px;
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  user-select: none;
+  touch-action: manipulation;
+}
+.btn:active { background: #16a34a; }
+.empty { visibility: hidden; }
+.restart {
+  margin-top: 10px;
+  padding: 8px 16px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  background: #3b82f6;
+  color: white;
+}
+.scoreboard {
+  margin-top: 10px;
+  font-size: 18px;
+}
+</style>
+</head>
+<body>
+<h3>🍅 & 🍠 双人情侣游戏</h3>
+<canvas id="game" width="300" height="300"></canvas>
+
+<!-- 番茄玩家控制 -->
+<div class="controls">
+  <div class="empty"></div>
+  <div class="btn" onclick="setDir('UP')">⬆️</div>
+  <div class="empty"></div>
+  <div class="btn" onclick="setDir('LEFT')">⬅️</div>
+  <div class="empty"></div>
+  <div class="btn" onclick="setDir('RIGHT')">➡️</div>
+  <div class="empty"></div>
+  <div class="btn" onclick="setDir('DOWN')">⬇️</div>
+  <div class="empty"></div>
+</div>
+
+<!-- 番薯玩家控制 -->
+<div class="controls">
+  <div class="empty"></div>
+  <div class="btn" onclick="setDir2('W')">⬆️</div>
+  <div class="empty"></div>
+  <div class="btn" onclick="setDir2('A')">⬅️</div>
+  <div class="empty"></div>
+  <div class="btn" onclick="setDir2('D')">➡️</div>
+  <div class="empty"></div>
+  <div class="btn" onclick="setDir2('S')">⬇️</div>
+  <div class="empty"></div>
+</div>
+
+<button class="restart" onclick="startGame()">重新开始</button>
+<div class="scoreboard" id="scoreboard">得分：0</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const box = 30;
+let tomato, sweetPotato, dir, dir2, score, timer;
+
+function startGame() {
+  tomato = {x: 0, y: 0};
+  sweetPotato = {x: 240, y: 240};
+  dir = null;
+  dir2 = null;
+  score = 0;
+  updateScore();
+  clearInterval(timer);
+  timer = setInterval(draw, 150);
+}
+
+function setDir(d){ dir=d; }
+function setDir2(d){ dir2=d; }
+
+function drawCharacter(char,type){
+  const centerX = char.x + box/2;
+  const centerY = char.y + box/2;
+  if(type==="tomato"){
+    ctx.fillStyle="red";
+    ctx.beginPath();
+    ctx.arc(centerX,centerY,box/2,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle="green";
+    ctx.beginPath();
+    ctx.moveTo(centerX,centerY-box/2+2);
+    ctx.lineTo(centerX-3,centerY-box/2+5);
+    ctx.lineTo(centerX+3,centerY-box/2+5);
+    ctx.closePath();
+    ctx.fill();
+  }else if(type==="sweetPotato"){
+    ctx.fillStyle="#D2691E";
+    ctx.beginPath();
+    ctx.ellipse(centerX,centerY,box/2,box*0.4,0,0,Math.PI*2);
+    ctx.fill();
+  }
+}
+
+function updateScore(){ document.getElementById("scoreboard").textContent="得分："+score; }
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // 移动番茄
+  if(dir==="UP") tomato.y-=box;
+  if(dir==="DOWN") tomato.y+=box;
+  if(dir==="LEFT") tomato.x-=box;
+  if(dir==="RIGHT") tomato.x+=box;
+
+  // 移动番薯
+  if(dir2==="W") sweetPotato.y-=box;
+  if(dir2==="S") sweetPotato.y+=box;
+  if(dir2==="A") sweetPotato.x-=box;
+  if(dir2==="D") sweetPotato.x+=box;
+
+  // 无限穿墙
+  [tomato,sweetPotato].forEach(c=>{
+    if(c.x<0)c.x=canvas.width-box;
+    if(c.x>=canvas.width)c.x=0;
+    if(c.y<0)c.y=canvas.height-box;
+    if(c.y>=canvas.height)c.y=0;
+  });
+
+  // 绘制角色
+  drawCharacter(tomato,"tomato");
+  drawCharacter(sweetPotato,"sweetPotato");
+
+  // 相遇得分
+  if(tomato.x===sweetPotato.x && tomato.y===sweetPotato.y){
+    score++;
+    updateScore();
+    // 相遇后随机移动番薯
+    sweetPotato.x = Math.floor(Math.random()*(canvas.width/box))*box;
+    sweetPotato.y = Math.floor(Math.random()*(canvas.height/box))*box;
+  }
+}
+
+startGame();
+</script>
+</body>
+</html>
