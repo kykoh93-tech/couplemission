@@ -2,41 +2,41 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>简易炸弹人游戏</title>
+<title>番茄炸弹人游戏</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <style>
 body { margin:0; background:#222; display:flex; flex-direction:column; align-items:center; font-family:Arial,sans-serif; }
 canvas { background:#333; margin-top:20px; }
-.controls { display:flex; justify-content:center; margin-top:10px; gap:10px; }
-.btn { padding:10px 15px; font-size:20px; border-radius:8px; background:#22c55e; color:white; user-select:none; }
+.controls { display:grid; grid-template-columns:60px 60px 60px; gap:5px; margin-top:10px; }
+.btn { padding:10px; font-size:18px; border-radius:8px; background:#22c55e; color:white; user-select:none; }
 .btn:active { background:#16a34a; }
 </style>
 </head>
 <body>
-<h3 style="color:white;">简易炸弹人游戏</h3>
+<h3 style="color:white;">番茄炸弹人游戏</h3>
 <canvas id="game" width="400" height="400"></canvas>
 <div class="controls">
+  <div></div><button class="btn" onclick="movePlayer(0,-1)">⬆️</button><div></div>
   <button class="btn" onclick="movePlayer(-1,0)">⬅️</button>
-  <button class="btn" onclick="movePlayer(1,0)">➡️</button>
-  <button class="btn" onclick="movePlayer(0,-1)">⬆️</button>
-  <button class="btn" onclick="movePlayer(0,1)">⬇️</button>
   <button class="btn" onclick="placeBomb()">💣</button>
+  <button class="btn" onclick="movePlayer(1,0)">➡️</button>
+  <div></div><button class="btn" onclick="movePlayer(0,1)">⬇️</button><div></div>
 </div>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-const tileSize = 40; 
+const tileSize = 40;
 const mapRows = 10, mapCols = 10;
+let gameOver = false;
 
-let player = {x:1, y:1};
-let bombs = [];
-let explosionTime = 50; 
-let walls = [];
-let monsters = [];
-let monsterTimer;
+// 玩家
+let player = {x:1, y:1, alive:true};
 
-// 0 = 空, 1 = 固定墙, 2 = 可炸墙
+// 蚯蚓怪物
+let monsters = [{x:8,y:8,dir:1,alive:true}];
+
+// 地图：0空,1固定墙,2可炸墙
 let map = [
 [1,1,1,1,1,1,1,1,1,1],
 [1,0,2,0,2,0,2,0,2,1],
@@ -50,23 +50,30 @@ let map = [
 [1,1,1,1,1,1,1,1,1,1],
 ];
 
-// 初始化怪物
-monsters.push({x:8,y:8});
+// 炸弹数组
+let bombs = [];
+const explosionTime = 50;
+const explosionRange = 1;
 
 // 控制玩家移动
 function movePlayer(dx, dy){
-  let nx = player.x + dx;
-  let ny = player.y + dy;
-  if(map[ny][nx] === 0){ player.x = nx; player.y = ny; }
+  if(gameOver) return;
+  let nx = player.x + dx, ny = player.y + dy;
+  if(map[ny][nx]===0){
+    player.x = nx; player.y = ny;
+  }
 }
 
 // 放置炸弹
 function placeBomb(){
-  bombs.push({x:player.x, y:player.y, timer:explosionTime});
+  if(gameOver) return;
+  bombs.push({x:player.x,y:player.y,timer:explosionTime});
 }
 
 // 游戏循环
 function gameLoop(){
+  if(gameOver) return;
+
   // 更新炸弹
   for(let i=bombs.length-1;i>=0;i--){
     bombs[i].timer--;
@@ -76,67 +83,132 @@ function gameLoop(){
     }
   }
 
-  // 移动怪物
+  // 更新怪物（蚯蚓）沿通道移动
   monsters.forEach(m=>{
-    if(Math.random()<0.2){
-      let dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-      let dir = dirs[Math.floor(Math.random()*4)];
-      let nx = m.x + dir[0], ny = m.y + dir[1];
-      if(map[ny][nx]===0) { m.x=nx; m.y=ny; }
+    if(!m.alive) return;
+    let nx = m.x + m.dir;
+    if(map[m.y][nx]===0) m.x = nx;
+    else m.dir *= -1;
+  });
+
+  // 检查爆炸是否碰到玩家
+  bombs.forEach(b=>{
+    checkExplosionHit(b);
+  });
+
+  // 检查怪物碰到玩家
+  monsters.forEach(m=>{
+    if(m.alive && m.x===player.x && m.y===player.y){
+      player.alive=false;
+      gameOver=true;
+      alert("游戏结束！番茄被蚯蚓吃掉了！");
     }
   });
 
   draw();
 }
 
-// 炸弹爆炸
+// 爆炸逻辑
 function explode(bomb){
-  let bx=bomb.x, by=bomb.y;
-  let dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  let positions = [{x:bomb.x,y:bomb.y}];
+  const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
   dirs.forEach(d=>{
-    for(let i=1;i<=1;i++){ // 爆炸范围1格
-      let nx = bx + d[0]*i, ny = by + d[1]*i;
-      if(map[ny][nx]===1) break; // 固定墙阻挡
-      if(map[ny][nx]===2) map[ny][nx]=0; // 可炸墙炸掉
+    for(let i=1;i<=explosionRange;i++){
+      let nx = bomb.x + d[0]*i, ny = bomb.y + d[1]*i;
+      if(map[ny][nx]===1) break; //固定墙挡住
+      positions.push({x:nx,y:ny});
+      if(map[ny][nx]===2){ map[ny][nx]=0; break; } //可炸墙炸掉
     }
   });
-  // 炸掉自己格子
-  map[by][bx]=0;
+
+  // 检查怪物
+  positions.forEach(pos=>{
+    monsters.forEach(m=>{
+      if(m.alive && m.x===pos.x && m.y===pos.y){
+        m.alive=false;
+      }
+    });
+  });
+
+  // 检查玩家
+  positions.forEach(pos=>{
+    if(player.x===pos.x && player.y===pos.y){
+      player.alive=false;
+      gameOver=true;
+      alert("游戏结束！番茄被炸死了！");
+    }
+  });
+
+  // 绘制爆炸烟（简单动画）
+  positions.forEach(pos=>{
+    ctx.fillStyle="orange";
+    ctx.fillRect(pos.x*tileSize+10,pos.y*tileSize+10,20,20);
+  });
+}
+
+// 检查爆炸碰撞玩家
+function checkExplosionHit(bomb){
+  if(bomb.timer>0) return;
+  const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+  let positions=[{x:bomb.x,y:bomb.y}];
+  dirs.forEach(d=>{
+    for(let i=1;i<=explosionRange;i++){
+      let nx=bomb.x+d[0]*i,ny=bomb.y+d[1]*i;
+      if(map[ny][nx]===1) break;
+      positions.push({x:nx,y:ny});
+      if(map[ny][nx]===2) break;
+    }
+  });
+  positions.forEach(pos=>{
+    if(pos.x===player.x && pos.y===player.y){
+      player.alive=false;
+      gameOver=true;
+      alert("游戏结束！番茄被炸死了！");
+    }
+  });
 }
 
 // 绘制地图
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
+  // 地图
   for(let y=0;y<mapRows;y++){
     for(let x=0;x<mapCols;x++){
-      if(map[y][x]===1) ctx.fillStyle="#555";
-      else if(map[y][x]===2) ctx.fillStyle="#aaa";
+      if(map[y][x]===1) ctx.fillStyle="#555"; // 固定墙
+      else if(map[y][x]===2) ctx.fillStyle="#aaa"; // 可炸墙
       else ctx.fillStyle="#333";
-      ctx.fillRect(x*tileSize, y*tileSize, tileSize, tileSize);
+      ctx.fillRect(x*tileSize,y*tileSize,tileSize,tileSize);
       ctx.strokeStyle="#222";
       ctx.strokeRect(x*tileSize,y*tileSize,tileSize,tileSize);
     }
   }
 
-  // 绘制炸弹
-  ctx.fillStyle="orange";
+  // 炸弹
+  ctx.fillStyle="black";
   bombs.forEach(b=>{
-    ctx.fillRect(b.x*tileSize+10,b.y*tileSize+10,20,20);
+    ctx.beginPath();
+    ctx.arc(b.x*tileSize+tileSize/2, b.y*tileSize+tileSize/2, 12,0,Math.PI*2);
+    ctx.fill();
   });
 
-  // 绘制玩家
-  ctx.fillStyle="blue";
-  ctx.fillRect(player.x*tileSize+5,player.y*tileSize+5,30,30);
+  // 玩家番茄
+  if(player.alive){
+    ctx.fillStyle="red";
+    ctx.beginPath();
+    ctx.arc(player.x*tileSize+tileSize/2, player.y*tileSize+tileSize/2, 15,0,Math.PI*2);
+    ctx.fill();
+  }
 
-  // 绘制怪物
-  ctx.fillStyle="red";
+  // 蚯蚓怪物
+  ctx.fillStyle="brown";
   monsters.forEach(m=>{
-    ctx.fillRect(m.x*tileSize+5,m.y*tileSize+5,30,30);
+    if(m.alive)
+      ctx.fillRect(m.x*tileSize+5, m.y*tileSize+5,30,30);
   });
 }
 
-setInterval(gameLoop, 100);
+setInterval(gameLoop, 200);
 </script>
 </body>
 </html>
