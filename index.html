@@ -2,133 +2,141 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>简化跑酷 Mario 风格游戏</title>
+<title>简易炸弹人游戏</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <style>
-body {
-  margin:0;
-  background:#87ceeb;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  font-family: Arial, sans-serif;
-}
-canvas { background:#87ceeb; display:block; margin-top:20px; }
-.controls { margin-top:10px; }
-.btn {
-  background:#22c55e; color:#fff; font-size:24px;
-  border-radius:8px; padding:10px 20px;
-  user-select:none;
-}
+body { margin:0; background:#222; display:flex; flex-direction:column; align-items:center; font-family:Arial,sans-serif; }
+canvas { background:#333; margin-top:20px; }
+.controls { display:flex; justify-content:center; margin-top:10px; gap:10px; }
+.btn { padding:10px 15px; font-size:20px; border-radius:8px; background:#22c55e; color:white; user-select:none; }
 .btn:active { background:#16a34a; }
-.scoreboard { margin-top:10px; font-size:18px; }
 </style>
 </head>
 <body>
-<h3>简化跑酷 Mario 风格游戏 🍅</h3>
-<canvas id="game" width="400" height="200"></canvas>
+<h3 style="color:white;">简易炸弹人游戏</h3>
+<canvas id="game" width="400" height="400"></canvas>
 <div class="controls">
-  <button class="btn" onclick="jump()">⬆️ 跳跃</button>
+  <button class="btn" onclick="movePlayer(-1,0)">⬅️</button>
+  <button class="btn" onclick="movePlayer(1,0)">➡️</button>
+  <button class="btn" onclick="movePlayer(0,-1)">⬆️</button>
+  <button class="btn" onclick="movePlayer(0,1)">⬇️</button>
+  <button class="btn" onclick="placeBomb()">💣</button>
 </div>
-<div class="scoreboard" id="scoreboard">得分：0</div>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-const gravity = 0.6;
+const tileSize = 40; 
+const mapRows = 10, mapCols = 10;
 
-let player, platforms, tomatoes, score, timer;
+let player = {x:1, y:1};
+let bombs = [];
+let explosionTime = 50; 
+let walls = [];
+let monsters = [];
+let monsterTimer;
 
-function startGame() {
-  player = {x:50, y:150, w:20, h:20, dy:0, onGround:false};
-  
-  // 初始连续地面平台
-  platforms = [
-    {x:0, y:180, w:400, h:20}
-  ];
-  
-  tomatoes = [];
-  score = 0;
-  updateScore();
-  clearInterval(timer);
-  timer = setInterval(gameLoop, 20);
+// 0 = 空, 1 = 固定墙, 2 = 可炸墙
+let map = [
+[1,1,1,1,1,1,1,1,1,1],
+[1,0,2,0,2,0,2,0,2,1],
+[1,2,1,2,1,2,1,2,0,1],
+[1,0,2,0,2,0,2,0,2,1],
+[1,2,1,2,1,2,1,2,0,1],
+[1,0,2,0,2,0,2,0,2,1],
+[1,2,1,2,1,2,1,2,0,1],
+[1,0,2,0,2,0,2,0,2,1],
+[1,0,0,2,0,2,0,2,0,1],
+[1,1,1,1,1,1,1,1,1,1],
+];
+
+// 初始化怪物
+monsters.push({x:8,y:8});
+
+// 控制玩家移动
+function movePlayer(dx, dy){
+  let nx = player.x + dx;
+  let ny = player.y + dy;
+  if(map[ny][nx] === 0){ player.x = nx; player.y = ny; }
 }
 
-function jump(){ 
-  if(player.onGround){ 
-    player.dy=-10; 
-    player.onGround=false; 
-  } 
+// 放置炸弹
+function placeBomb(){
+  bombs.push({x:player.x, y:player.y, timer:explosionTime});
 }
 
-function updateScore(){ 
-  document.getElementById("scoreboard").textContent="得分："+score; 
-}
-
+// 游戏循环
 function gameLoop(){
-  // 玩家自动向右移动
-  player.x += 2;
-  player.dy += gravity;
-  player.y += player.dy;
-
-  // 平台碰撞
-  player.onGround=false;
-  platforms.forEach(p=>{
-    if(player.x+player.w>p.x && player.x<p.x+p.w && player.y+player.h>p.y && player.y+player.h<p.y+p.h+player.dy){
-      player.y=p.y-player.h;
-      player.dy=0;
-      player.onGround=true;
+  // 更新炸弹
+  for(let i=bombs.length-1;i>=0;i--){
+    bombs[i].timer--;
+    if(bombs[i].timer<=0){
+      explode(bombs[i]);
+      bombs.splice(i,1);
     }
-  });
-
-  // 滚动平台和番茄
-  platforms.forEach(p=>{ p.x-=2; });
-  tomatoes.forEach(t=>{ t.x-=2; });
-
-  // 移除屏幕外的番茄，但地面持续
-  tomatoes = tomatoes.filter(t=>t.x+t.w>0);
-
-  // 保持连续地面
-  let lastPlatform = platforms[platforms.length-1];
-  if(lastPlatform.x + lastPlatform.w < canvas.width){
-    platforms.push({x: lastPlatform.x + lastPlatform.w, y:180, w:80, h:20});
   }
 
-  // 简单随机生成跳跃番茄
-  if(Math.random()<0.02){
-    let y = 120 + Math.random()*40; // 番茄高度
-    tomatoes.push({x:canvas.width, y:y, w:10, h:10, collected:false});
-  }
-
-  // 番茄碰撞
-  tomatoes.forEach(t=>{
-    if(!t.collected && player.x+player.w>t.x && player.x<t.x+t.w && player.y+player.h>t.y && player.y<t.y+t.h){
-      t.collected=true;
-      score++;
-      updateScore();
+  // 移动怪物
+  monsters.forEach(m=>{
+    if(Math.random()<0.2){
+      let dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      let dir = dirs[Math.floor(Math.random()*4)];
+      let nx = m.x + dir[0], ny = m.y + dir[1];
+      if(map[ny][nx]===0) { m.x=nx; m.y=ny; }
     }
   });
 
   draw();
 }
 
+// 炸弹爆炸
+function explode(bomb){
+  let bx=bomb.x, by=bomb.y;
+  let dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  dirs.forEach(d=>{
+    for(let i=1;i<=1;i++){ // 爆炸范围1格
+      let nx = bx + d[0]*i, ny = by + d[1]*i;
+      if(map[ny][nx]===1) break; // 固定墙阻挡
+      if(map[ny][nx]===2) map[ny][nx]=0; // 可炸墙炸掉
+    }
+  });
+  // 炸掉自己格子
+  map[by][bx]=0;
+}
+
+// 绘制地图
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // 绘制平台
-  ctx.fillStyle="#654321";
-  platforms.forEach(p=>ctx.fillRect(p.x,p.y,p.w,p.h));
+  for(let y=0;y<mapRows;y++){
+    for(let x=0;x<mapCols;x++){
+      if(map[y][x]===1) ctx.fillStyle="#555";
+      else if(map[y][x]===2) ctx.fillStyle="#aaa";
+      else ctx.fillStyle="#333";
+      ctx.fillRect(x*tileSize, y*tileSize, tileSize, tileSize);
+      ctx.strokeStyle="#222";
+      ctx.strokeRect(x*tileSize,y*tileSize,tileSize,tileSize);
+    }
+  }
 
-  // 绘制番茄
-  ctx.fillStyle="red";
-  tomatoes.forEach(t=>{ if(!t.collected) ctx.fillRect(t.x,t.y,t.w,t.h); });
+  // 绘制炸弹
+  ctx.fillStyle="orange";
+  bombs.forEach(b=>{
+    ctx.fillRect(b.x*tileSize+10,b.y*tileSize+10,20,20);
+  });
 
   // 绘制玩家
   ctx.fillStyle="blue";
-  ctx.fillRect(player.x,player.y,player.w,player.h);
+  ctx.fillRect(player.x*tileSize+5,player.y*tileSize+5,30,30);
+
+  // 绘制怪物
+  ctx.fillStyle="red";
+  monsters.forEach(m=>{
+    ctx.fillRect(m.x*tileSize+5,m.y*tileSize+5,30,30);
+  });
 }
 
-startGame();
+setInterval(gameLoop, 100);
 </script>
 </body>
 </html>
